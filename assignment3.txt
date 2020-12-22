@@ -1,0 +1,272 @@
+/* Authors: Jasmine Battle, Elizabeth Howell, Leticia Rossett
+ * Description: This is an Arduino based accessory for a Ping Pong game. The accessory keeps track of each players
+ * score as well as what side the player is on. It also includes a light to show which player is serving as well
+ * as when one player wins the match. It includes buttons to both increment and decrement the score for accurate 
+ * scoring.
+ * Date: 3/6/20
+ */
+#include <LiquidCrystal.h>
+
+LiquidCrystal lcd(7, 8, 9, 10, 11, 12); //Set up for LCD 
+
+int A = 6; //LED for side A
+int B = 13; //LED for side B
+
+int aIncrement = 5; //player A increment
+int aDecrement = 4; //player A decrement
+int bIncrement = 3; //player B increment
+int bDecrement = 2; //player B decrement
+
+int read1 = 0; //reads Button for a increment
+int read2 = 0; //reads Button for a decrement
+int read3 = 0; //reads Button for b increment
+int read4 = 0; //reads Button for b decrement
+
+int playerA = 1; //LCD cursor start for playerA side
+int playerB = 10; //LCD cursor start for playerB side
+
+int aScore = 0; //Game score for side A
+int bScore = 0; //Game score for side B
+int aSets = 0; //Sets for side A
+int bSets = 0; //Sets for side B
+int serve = 0; //Keeps track of number of points played with current server
+int server = A; //Keeps track of which side is serving
+bool tenAll = false; //Flag for 10-all
+
+int currentStateA1 = 0; //Current state of aIncrement
+int previousStateA1 = 0; //Previous state of aIncrement
+
+int currentStateA2 = 0; //Current state of aDecrement
+int previousStateA2 = 0; //Previous state of aDecrement
+
+int currentStateB1 = 0; //Current state of bIncrement
+int previousStateB1 = 0; //Previous state of bIncrement
+
+int currentStateB2 = 0; //Current state of bDecrement
+int previousStateB2 = 0; //Previous state of bDecrement
+
+void setup() {
+  lcd.begin(16, 2);
+  printScreen();
+  pinMode(A, OUTPUT);
+  pinMode(B, OUTPUT);
+  pinMode(aIncrement, INPUT);
+  pinMode(aDecrement, INPUT);
+  pinMode(bIncrement, INPUT);
+  pinMode(bDecrement, INPUT);
+  digitalWrite(server, HIGH);
+}
+
+void loop() {
+  
+  if(aSets == 3) { //If player A has wins 3 out of 5 sets, player A wins
+    playerWins(A);
+    return;
+  } else if(bSets == 3) { //If player B wins 3 out of 5 sets, player b wins
+     playerWins(B);
+    return;
+  }
+
+  //reads input of a increment button
+  read1 = digitalRead(aIncrement); 
+  if(read1 == HIGH) {
+    currentStateA1 = 1;
+  } else {
+    currentStateA1 = 0;
+  }
+
+  if(currentStateA1 != previousStateA1) {
+    previousStateA1 = currentStateA1;
+
+    //If a increment is pressed, a is incremented, serve counter increased, checks if set is won
+    if(currentStateA1 == 1) { 
+      aScore++; 
+      checkServerIncrement();
+      checkWin();
+      printScreen();
+    }
+  }
+  
+  //read input of a decrement button
+  read2 = digitalRead(aDecrement); 
+  if(read2 == HIGH) {
+    currentStateA2 = 1;
+  } else {
+    currentStateA2 = 0;
+  }
+
+  if(currentStateA2 != previousStateA2) {
+    previousStateA2 = currentStateA2;
+
+    //If a decrement button is pressed, decrements a and switches to previous server 
+    //If decremented enough for a player to win the set, that player wins the set
+    if(currentStateA2 == 1) {
+      if(aScore > 0) {
+        checkServerDecrement(aScore, bScore);
+        aScore--;
+        checkWin();
+        printScreen();  
+      }
+    }
+  }
+
+  //reads input of b increment button
+  read3 = digitalRead(bIncrement); 
+    if(read3 == HIGH) {
+      currentStateB1 = 1;
+    } else {
+      currentStateB1 = 0;
+    }
+    
+  if(currentStateB1 != previousStateB1) {
+    previousStateB1 = currentStateB1;
+
+    //If b increment is pressed, b is incremented, serve counter increased, checks if set is won
+    if(currentStateB1 == 1) {
+      bScore++;
+      checkServerIncrement();
+      checkWin();
+      printScreen();
+    }
+  }
+
+  //reads input of b increment button
+  read4 = digitalRead(bDecrement);
+    if(read4 == HIGH) {
+      currentStateB2 = 1;
+    } else {
+      currentStateB2 = 0;
+    }
+    
+  if(currentStateB2 != previousStateB2) {
+    previousStateB2 = currentStateB2;
+
+    //If b decrement button is pressed, decrements b and switches to previous server 
+    //If decremented enough for a player to win the set, that player wins the set
+    if(currentStateB2 == 1) { 
+        if(bScore >0) {
+          checkServerDecrement(bScore, aScore);
+          bScore = bScore - 1;
+          checkWin();
+          printScreen();
+        }
+      }
+  }
+  delay(100);
+}
+
+//Prints the current scores for both players on to the lcd
+void printScreen() {
+  lcd.clear();
+  lcd.setCursor((playerA-1),0);
+  lcd.print("A");
+  lcd.setCursor(playerA,0);
+  lcd.print(aScore);
+  lcd.setCursor(playerA,1);
+  lcd.print(aSets);
+  lcd.setCursor((playerB - 1),0);
+  lcd.print("B");
+  lcd.setCursor(playerB,0);
+  lcd.print(bScore);
+  lcd.setCursor(playerB,1);
+  lcd.print(bSets);
+}
+
+//resets scores, swaps sides, resets serve counter after a set is won
+void reset(int newServer){
+  aScore = 0;
+  bScore = 0;
+  server = newServer;
+  swapSides();
+  serve = 0;
+  tenAll = false;
+  printScreen();
+}
+
+//Swaps two integers
+void swap(int &a, int &b) {
+  int temp = a;
+  a = b;
+  b = temp;
+}
+
+//Swaps sides for each player
+void swapSides() {
+  swap(playerA, playerB);
+  swap(aIncrement, bIncrement);
+  swap(aDecrement, bDecrement);
+  swap(A, B);
+  swap(currentStateA1, currentStateB1);
+  swap(currentStateA2, currentStateB2);
+  swap(previousStateA1, previousStateB1);
+  swap(previousStateA2, previousStateB2);
+  swapServer();
+}
+
+//Switches the server
+void swapServer() {
+  if (server == A) {
+    server = B;
+    digitalWrite(A, LOW);
+    digitalWrite(server, HIGH);
+  } else if (server == B) {
+    server = A;
+    digitalWrite(B, LOW);
+    digitalWrite(server, HIGH);
+  }
+}
+
+//Checks if a player wins a set
+void checkWin() {
+  if (bScore >= 11 && aScore <= (bScore - 2)) { //Checks if player B won set
+    digitalWrite(server, LOW);
+    bSets++;
+     (B);
+  } else if(aScore >= 11 && bScore <= (aScore - 2)) { //Checks if player A won set
+    digitalWrite(server, LOW);
+    aSets++;
+    reset(A);
+  }
+  digitalWrite(server, HIGH);
+}
+
+//When a score is decremented, reverts to previous server
+void checkServerDecrement(int score1, int score2) {
+  if(score1 == 10 && score2 == 10) {
+        tenAll = false;
+        serve = 1;
+        swapServer();
+  }else if (tenAll){
+       swapServer();
+  }else if(serve == 0) {
+        serve = 1;
+        swapServer();
+  }  else {
+    serve--;
+  }
+}
+
+void checkServerIncrement(){
+  serve++;
+  if(aScore == 10 && bScore == 10) { //if score reaches 10-all, flag is turned on
+    tenAll = true;
+    }
+
+  //if score is not 10-all, service changes after 2 points
+  //or if score has reached 10-all, service changes after 1 point
+  if ((serve == 2) || (tenAll)) { 
+    swapServer();
+    serve = 0;
+  } 
+}
+
+//If a player wins the match their light will blink
+void playerWins(int player) {
+  digitalWrite(server, LOW);
+  for(int i=0; i<15; i++) {
+    digitalWrite(player, HIGH);
+    delay(1000);
+    digitalWrite(player, LOW);
+    delay(1000);
+  }
+}
